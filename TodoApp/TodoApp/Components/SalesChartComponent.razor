@@ -1,0 +1,143 @@
+﻿@rendermode InteractiveServer
+@inject IJSRuntime JSRuntime
+
+<div style="padding:20px; border:1px solid #ddd; border-radius:10px; background-color:#f9f9f9;">
+    <h3>📊 График продаж</h3>
+    
+    <div style="margin-bottom:20px;">
+        <label>Период: </label>
+        <select @bind="selectedPeriod">
+            <option value="7">Последние 7 дней</option>
+            <option value="14">Последние 14 дней</option>
+            <option value="30">Последние 30 дней</option>
+        </select>
+        <button @onclick="LoadData" style="margin-left:10px;">Обновить</button>
+    </div>
+    
+    <div style="position:relative; height:400px; width:100%;">
+        <canvas id="salesChart"></canvas>
+    </div>
+    
+    <div style="margin-top:20px;">
+        <p>📈 Общая выручка: <strong>@totalRevenue.ToString("C")</strong></p>
+        <p>📊 Средняя выручка в день: <strong>@averageRevenue.ToString("C")</strong></p>
+    </div>
+</div>
+
+@code {
+    private int selectedPeriod = 7;
+    private decimal totalRevenue = 0;
+    private decimal averageRevenue = 0;
+    private List<SaleData> sales = new List<SaleData>();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        GenerateSalesData();
+        await RenderChart();
+        CalculateStats();
+        StateHasChanged();
+    }
+
+    private void GenerateSalesData()
+    {
+        sales.Clear();
+        var random = new Random();
+        
+        for (int i = 0; i < selectedPeriod; i++)
+        {
+            var date = DateTime.Now.AddDays(-(selectedPeriod - i - 1));
+            var amount = random.Next(1000, 10000);
+            sales.Add(new SaleData
+            {
+                Date = date,
+                Amount = amount
+            });
+        }
+    }
+
+    private void CalculateStats()
+    {
+        totalRevenue = sales.Sum(s => s.Amount);
+        averageRevenue = sales.Count > 0 ? totalRevenue / sales.Count : 0;
+    }
+
+    private async Task RenderChart()
+    {
+        var dates = sales.Select(s => s.Date.ToString("dd/MM")).ToArray();
+        var amounts = sales.Select(s => s.Amount).ToArray();
+        
+        var chartConfig = new
+        {
+            type = "line",
+            data = new
+            {
+                labels = dates,
+                datasets = new[]
+                {
+                    new
+                    {
+                        label = "Продажи (руб)",
+                        data = amounts,
+                        borderColor = "rgb(75, 192, 192)",
+                        backgroundColor = "rgba(75, 192, 192, 0.2)",
+                        tension = 0.1,
+                        fill = true
+                    }
+                }
+            },
+            options = new
+            {
+                responsive = true,
+                maintainAspectRatio = false,
+                plugins = new
+                {
+                    legend = new
+                    {
+                        position = "top"
+                    },
+                    title = new
+                    {
+                        display = true,
+                        text = "Динамика продаж"
+                    }
+                },
+                scales = new
+                {
+                    y = new
+                    {
+                        beginAtZero = true,
+                        title = new
+                        {
+                            display = true,
+                            text = "Сумма (руб)"
+                        }
+                    },
+                    x = new
+                    {
+                        title = new
+                        {
+                            display = true,
+                            text = "Дата"
+                        }
+                    }
+                }
+            }
+        };
+        
+        await JSRuntime.InvokeVoidAsync("renderChart", "salesChart", chartConfig);
+    }
+
+    private class SaleData
+    {
+        public DateTime Date { get; set; }
+        public decimal Amount { get; set; }
+    }
+}
